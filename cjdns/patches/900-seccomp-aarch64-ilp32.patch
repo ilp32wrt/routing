@@ -1,0 +1,69 @@
+From: liviyifan <344781483+liviyifan@users.noreply.github.com>
+Subject: seccomp: AArch64 ILP32
+
+- ArchInfo: AUDIT_ARCH_AARCH64ILP32 (0xd00000b7) for __aarch64__ with __ILP32__;
+  the filter's arch check otherwise fails on ILP32.
+- The allow list names fstat and setrlimit unconditionally. AArch64 ILP32 has
+  neither (musl uses statx and prlimit64 there): allow those when fstat,
+  fstat64, getrlimit and ugetrlimit are not defined.
+
+---
+--- a/util/ArchInfo.c
++++ b/util/ArchInfo.c
+@@ -60,6 +60,7 @@
+ #define ArchInfo_AUDIT_ARCH_I386 0x40000003
+ #define ArchInfo_AUDIT_ARCH_OPENRISC 0x0000005c
+ #define ArchInfo_AUDIT_ARCH_AARCH64 0xc00000b7
++#define ArchInfo_AUDIT_ARCH_AARCH64ILP32 0xd00000b7
+ #define ArchInfo_AUDIT_ARCH_FRV 0x00005441
+ #define ArchInfo_AUDIT_ARCH_ARM 0x40000028
+ #define ArchInfo_AUDIT_ARCH_X86_64 0xc000003e
+@@ -84,6 +85,9 @@
+       defined(_M_IX86) || defined(__i386)
+     #define ARCH ArchInfo_AUDIT_ARCH_I386
+     #define ARCHSTR "i386"
++#elif defined(__aarch64__) && defined(__ILP32__)
++    #define ARCH ArchInfo_AUDIT_ARCH_AARCH64ILP32
++    #define ARCHSTR "arm64_ilp32"
+ #elif defined(__aarch64__)
+     #define ARCH ArchInfo_AUDIT_ARCH_AARCH64
+     #define ARCHSTR "arm64"
+--- a/util/Seccomp_linux.c
++++ b/util/Seccomp_linux.c
+@@ -309,6 +309,10 @@
+         #ifdef __NR_ugetrlimit
+             IFEQ(__NR_ugetrlimit, success),
+         #endif
++        // 32-bit ABIs with only prlimit64 (AArch64 ILP32, riscv32); also Security_nofiles
++        #if !defined(__NR_getrlimit) && !defined(__NR_ugetrlimit) && defined(__NR_prlimit64)
++            IFEQ(__NR_prlimit64, success),
++        #endif
+         #ifdef __NR_mmap
+             IFEQ(__NR_mmap, success),
+         #endif
+@@ -318,7 +322,13 @@
+         IFEQ(__NR_munmap, success),
+ 
+         // printf()
+-        IFEQ(__NR_fstat, success),
++        #ifdef __NR_fstat
++            IFEQ(__NR_fstat, success),
++        #endif
++        #if !defined(__NR_fstat) && !defined(__NR_fstat64) && defined(__NR_statx)
++            // musl on AArch64 ILP32 (no fstat/fstat64)
++            IFEQ(__NR_statx, success),
++        #endif
+         #ifdef __NR_fstat64
+             IFEQ(__NR_fstat64, success),
+         #endif
+@@ -334,7 +344,9 @@
+         // Security_checkPermissions
+         IFEQ(__NR_getuid, success),
+         // Security_nofiles
+-        IFEQ(__NR_setrlimit, success),
++        #ifdef __NR_setrlimit
++            IFEQ(__NR_setrlimit, success),
++        #endif
+ 
+         // for ETHInterface_listDevices (netlinkk)
+         #ifdef __NR_bind

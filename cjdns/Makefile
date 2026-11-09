@@ -18,7 +18,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=cjdns
 PKG_VERSION:=21.1
-PKG_RELEASE:=7
+PKG_RELEASE:=8
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://codeload.github.com/cjdelisle/cjdns/tar.gz/$(PKG_NAME)-v$(PKG_VERSION)?
